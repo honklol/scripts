@@ -9,8 +9,8 @@ else
 curl -LO https://cloud.centos.org/centos/7/images/CentOS-7-x86_64-GenericCloud.qcow2
 qm create $2 --memory 2048 --name centos-7-cloudinit --net0 virtio,bridge=vmbr1
 qm importdisk $2 CentOS-7-x86_64-GenericCloud.qcow2 $1
-qm set $2 --scsihw virtio-scsi-pci --scsi0 $1:$2/vm-$2-disk-0.qcow2
-qm set $2 --ide2 local:cloudinit
+qm set $2 --scsihw virtio-scsi-pci --scsi0 unused0:$1:$2/vm-$2-disk-0.raw
+qm set $2 --ide2 $1:cloudinit
 qm set $2 --boot c --bootdisk scsi0
 qm set $2 --serial0 socket --vga serial0
 qm template $2
