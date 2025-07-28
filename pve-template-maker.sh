@@ -3,7 +3,7 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
-VERSION="1.3.3"
+VERSION="1.3.4"
 TEMP_DL="/tmp/pve-dl"
 LOG_FILE="/var/log/pve-template-maker.log"
 COLOR=1
@@ -144,8 +144,10 @@ select_storage() {
 
   local sel
   safe_read "Enter number: " sel
+  echo "[DEBUG] You entered sel='$sel'"
   [[ ! "$sel" =~ ^[0-9]+$ || $sel -lt 1 ]] && error "Invalid storage selection."
   STORAGE=$(pvesm status --enabled | awk "NR==$((sel+1)){print \$1}")
+  echo "[DEBUG] STORAGE chosen='$STORAGE'"
   [[ -z "${STORAGE}" ]] && error "Invalid selection."
 }
 storage_supports_qcow2() {
