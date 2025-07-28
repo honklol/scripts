@@ -3,8 +3,8 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
-VERSION="1.3.2"          # Script version
-TEMP_DL="/tmp/pve-dl"    # Where images are fetched before import
+VERSION="1.3.3"
+TEMP_DL="/tmp/pve-dl"
 LOG_FILE="/var/log/pve-template-maker.log"
 COLOR=1
 
@@ -23,7 +23,7 @@ init_colors() {
   fi
 }
 color() {
-  if (( COLOR )); then echo -ne "$1"; fi
+  ((COLOR)) && echo -ne "$1"
 }
 C_CYAN='\e[1;36m'; C_GREEN='\e[1;32m'; C_YELLOW='\e[1;33m'; C_RED='\e[1;31m'; C_RESET='\e[0m'
 
@@ -39,10 +39,9 @@ trap cleanup EXIT INT TERM
 error() {
   color "${C_RED}"
   echo -e "\nERROR: $*" | tee -a "${LOG_FILE}" >&2
-  color "${C_RESET}" ; tput cnorm 2>/dev/null || true
+  color "${C_RESET}"; tput cnorm 2>/dev/null || true
   exit 1
 }
-
 stage()   { color "${C_CYAN}"; echo -e "\n==> $*${C_RESET}"; redraw_progress_if_needed; }
 notice()  { color "${C_GREEN}"; echo -e "✔ $*${C_RESET}"; redraw_progress_if_needed; }
 
@@ -57,15 +56,13 @@ show_progress() {
     _draw_progress_bar
 }
 _draw_progress_bar() {
-    # Get terminal width and height
     local bar_w pct fill term_cols term_rows
     term_cols=$(tput cols 2>/dev/null || echo 80)
     term_rows=$(tput lines 2>/dev/null || echo 24)
     bar_w=$((term_cols-30)); ((bar_w<10)) && bar_w=10
-    pct=0; if (( PROGRESS_TOTAL != 0 )); then pct=$(( PROGRESS_CUR * 100 / PROGRESS_TOTAL )); fi
-    fill=0; if (( PROGRESS_TOTAL != 0 )); then fill=$(( pct * bar_w / 100 )); fi
+    pct=0; ((PROGRESS_TOTAL!=0)) && pct=$(( PROGRESS_CUR*100/PROGRESS_TOTAL ))
+    fill=0; ((PROGRESS_TOTAL!=0)) && fill=$(( pct*bar_w/100 ))
 
-    # Move cursor to bottom, at last row, clear that line
     tput civis
     tput sc
     tput cup $((term_rows-1)) 0
@@ -182,7 +179,7 @@ import_disk_and_convert() {
   qm importdisk "${vmid}" "${img}" "${storage}" --format "${targetfmt}" || error "Import disk failed"
 }
 
-# -------- Template Creation --------
+# -------- Template Creation (One by One) --------
 create_template() {
   local os="$1" url="$2"
   local nick="${OS_NICK[$os]}"
@@ -226,11 +223,11 @@ create_template() {
 # -------- Robust Safe Read --------
 safe_read() {
   local prompt="$1"; shift
-  if [[ -t 0 ]]; then
+  if [[ -r /dev/tty ]]; then
     read -rp "$prompt" "$@" </dev/tty
   else
-    echo -n "$prompt"
-    read -r "$@"
+    echo "ERROR: This script must be run from a terminal for input." >&2
+    exit 1
   fi
 }
 
@@ -247,13 +244,13 @@ main_menu() {
 
   local choice_input
   safe_read $'\nSelection (e.g. 1 3 5): ' choice_input
+  local IFS=' '
   read -ra choice <<< "$choice_input"
 
   declare -a choices
   for idx in "${choice[@]}"; do
     if [[ "$idx" =~ ^[0-9]+$ && "$idx" -ge 1 && "$idx" -le ${#OS_ORDER[@]} ]]; then
-      local oskey="${OS_ORDER[$((idx-1))]}"
-      choices+=("${oskey}")
+      choices+=("${OS_ORDER[$((idx-1))]}")
     else
       notice "Warning: Invalid selection '$idx', skipping..."
     fi
@@ -263,6 +260,7 @@ main_menu() {
   select_storage
   echo
 
+  # Now handle **one-by-one**, fully queued:
   for os in "${choices[@]}"; do
     local imgurl url
     safe_read "Custom image URL for ${os}? Leave blank for default: " imgurl
